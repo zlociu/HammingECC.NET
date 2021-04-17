@@ -4,6 +4,7 @@ open System
 open System.Collections
 open System.IO
 open System.Text
+open ArrayExtension
 
 (*  ALGORYTM KODOWANIA
          0 1 2 3 4 5 6 7 
@@ -22,19 +23,6 @@ open System.Text
     w pole 4 wstawiamy sumę po kolumnach 4 5 6 7
     w pole 8 wstawiamy sumę po wierszach 8 24
     w pole 16 wstawiamy sumę po wierszach 16 24
-*)
-
-(* KODOWANIE
-    1.
-
-    2. w pętli:
-    2.1 pobierz bajty az dostepne bedzie 26 bitow
-    2.2 oblicz sumy kontrolne
-    2.3 zapisz 32 bity jako 4 bajty do pliku
-
-    3. jeśli pozostałe bits.Lenght != 26, dopełnienie '0' do 26
-
-    4. Doklejenie na końcu Bajt informujący ile '0' dopisano żeby je potem zabrać przy dekodowaniu
 *)
 
 type Mode = 
@@ -59,8 +47,7 @@ type Hamming() =
             // 4. dorobić bity parzystości
         for it in seq{1; 2; 4; 8; 16} do
             bitArray.[it] <- bitArray 
-                            |> Array.mapi (fun x y -> (x &&& it = it))
-                            |> Array.filter
+                            |> ArrayExtension.filteri (fun x -> (x &&& it = it))
                             |> Array.fold (fun x y -> x ^^^ y) 0 
         bitArray.[0] <- bitArray |> Array.fold (fun x y -> x ^^^ y) 0
             // 5. zapisać jako 4 bajty do pliku 
@@ -73,7 +60,7 @@ type Hamming() =
         let mutable offset = 0;
         let mutable remainBits = ""
     
-        while (offset + 3) < data.Length do
+        while ( ((offset + 2) < data.Length && remainBits.Length > 0) || ((offset + 3) < data.Length) ) do
             // 1. przygotować nową porcję bitów (26 bitów z)
             let strBuild = new StringBuilder(remainBits) 
             while strBuild.Length < 26 do 
@@ -81,15 +68,15 @@ type Hamming() =
                 |> (fun (x:string) -> x.PadLeft(8, '0'))
                 |> strBuild.Append |> ignore
                 offset <- offset + 1
-            printfn "%s" (strBuild.ToString())
+            //printfn "%s" (strBuild.ToString())
             // 2. dodać bity parzystości
             for i in seq{0; 1; 2; 4; 8; 16} do
                 strBuild.Insert(i, "0") |> ignore
             // 3. nadmiarowe bity przenieś do następnej iteracji
-            printfn "%s" (strBuild.ToString())
+            //printfn "%s" (strBuild.ToString())
             remainBits <- strBuild.ToString().[32..]
             let result = this.ComputeECC (strBuild.ToString())
-            printfn "%s" result
+            //printfn "%s" result
             let writableData = [|0; 8; 16; 24|] |> Array.map (fun x -> Convert.ToByte(result.[x..(x+7)], 2))
             outputFile.Write(writableData, 0, 4)
         // 6. dopisać ostatnie bity
@@ -99,13 +86,14 @@ type Hamming() =
             |> (fun (x:string) -> x.PadLeft(8, '0'))
             |> strBuild.Append |> ignore
             offset <- offset + 1
-        let concatEndSize = 32 - strBuild.Length
-        for i = (32 - strBuild.Length) downto 0 do
+        let concatEndSize = 26 - strBuild.Length
+        for i = (32 - strBuild.Length) downto 1 do
             strBuild.Append("0") |> ignore 
         for it in seq{0; 1; 2; 4; 8; 16} do
                 strBuild.Insert(it, "0") |> ignore
+        //printfn "%s" (strBuild.ToString())        
         let result = this.ComputeECC (strBuild.ToString())
-        printfn "%s" result
+        //printfn "%s" result
         let writableData = [|0; 8; 16; 24|] |> Array.map (fun x -> Convert.ToByte(result.[x..(x+7)], 2))
         outputFile.Write(writableData, 0, 4)
         outputFile.Write([|byte concatEndSize|], 0, 1)

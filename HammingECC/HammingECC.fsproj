@@ -4,6 +4,7 @@
     <TargetFramework>net5.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="ArrayExtension.fs" />
     <Compile Include="Hamming.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
