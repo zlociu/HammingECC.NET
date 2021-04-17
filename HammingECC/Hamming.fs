@@ -3,6 +3,7 @@ module Hamming
 open System
 open System.Collections
 open System.IO
+open System.Text
 
 (*  ALGORYTM KODOWANIA
          0 1 2 3 4 5 6 7 
@@ -50,30 +51,79 @@ type Hamming() =
     member val verbose = false with get, set
 
     (* metody *)
+    member private this.ComputeECC (data:string) = 
+        let bitArray = data
+                        |> (fun (x:string) -> x.Remove 32) 
+                        |> (fun (x:string) -> x.ToCharArray()) 
+                        |> Array.map (fun x -> int (Char.GetNumericValue x))
+            // 4. dorobić bity parzystości
+        for it in seq{1; 2; 4; 8; 16} do
+            bitArray.[it] <- bitArray 
+                            |> Array.mapi (fun x y -> (x &&& it = it))
+                            |> Array.filter
+                            |> Array.fold (fun x y -> x ^^^ y) 0 
+        bitArray.[0] <- bitArray |> Array.fold (fun x y -> x ^^^ y) 0
+            // 5. zapisać jako 4 bajty do pliku 
+        String.Join("", bitArray) 
+        
+
     member this.Encode() =
         let data = File.ReadAllBytes(this.fileName)
         let outputFile = File.OpenWrite(this.fileName + ".ecc")
         let mutable offset = 0;
-        let mutable remainBits = BitArray(0)
+        let mutable remainBits = ""
     
-        while offset < data.Length do
-            let newData = BitArray(32, false)
-            let mutable index = 3
-            while offset < data.Length do
-                0 |> ignore
+        while (offset + 3) < data.Length do
+            // 1. przygotować nową porcję bitów (26 bitów z)
+            let strBuild = new StringBuilder(remainBits) 
+            while strBuild.Length < 26 do 
+                Convert.ToString(data.[offset], 2) 
+                |> (fun (x:string) -> x.PadLeft(8, '0'))
+                |> strBuild.Append |> ignore
+                offset <- offset + 1
+            printfn "%s" (strBuild.ToString())
+            // 2. dodać bity parzystości
+            for i in seq{0; 1; 2; 4; 8; 16} do
+                strBuild.Insert(i, "0") |> ignore
+            // 3. nadmiarowe bity przenieś do następnej iteracji
+            printfn "%s" (strBuild.ToString())
+            remainBits <- strBuild.ToString().[32..]
+            let result = this.ComputeECC (strBuild.ToString())
+            printfn "%s" result
+            let writableData = [|0; 8; 16; 24|] |> Array.map (fun x -> Convert.ToByte(result.[x..(x+7)], 2))
+            outputFile.Write(writableData, 0, 4)
+        // 6. dopisać ostatnie bity
+        let strBuild = new StringBuilder(remainBits) 
+        while offset < data.Length do 
+            Convert.ToString(data.[offset], 2) 
+            |> (fun (x:string) -> x.PadLeft(8, '0'))
+            |> strBuild.Append |> ignore
+            offset <- offset + 1
+        let concatEndSize = 32 - strBuild.Length
+        for i = (32 - strBuild.Length) downto 0 do
+            strBuild.Append("0") |> ignore 
+        for it in seq{0; 1; 2; 4; 8; 16} do
+                strBuild.Insert(it, "0") |> ignore
+        let result = this.ComputeECC (strBuild.ToString())
+        printfn "%s" result
+        let writableData = [|0; 8; 16; 24|] |> Array.map (fun x -> Convert.ToByte(result.[x..(x+7)], 2))
+        outputFile.Write(writableData, 0, 4)
+        outputFile.Write([|byte concatEndSize|], 0, 1)
+        //8. zapisać plik i zamknąć    
+        outputFile.Flush()  
+        outputFile.Close() 
         
 
     member this.Decode() =
-        let data = File.ReadAllBytes(this.fileName)  
-        let mutable offset = 0;
-        let bits = BitArray(data.[offset..(offset+4)])
-    
+        let data = File.ReadAllBytes(this.fileName)
+        let mutable offset = 0
         while offset < data.Length do
-        0 |> ignore 
+            0 |> ignore
 
     //może dobre na początek
     member this.Verify() =
         let data = File.ReadAllBytes(this.fileName)
-        let mutable offset = 0;
-        0 |> ignore
+        let mutable offset = 0
+        while offset < data.Length do
+            0 |> ignore
     
