@@ -70,13 +70,13 @@ type Hamming() =
             //printfn "%s" (strBuild.ToString())
             // 2. dodać bity parzystości
             for i in seq{0; 1; 2; 4; 8; 16} do
-                strBuild.Insert(i, "0") |> ignore
+                strBuild.Insert(i, '0') |> ignore
             // 3. nadmiarowe bity przenieś do następnej iteracji
             //printfn "%s" (strBuild.ToString())
             remainBits <- strBuild.ToString().[32..]
             let result = this.ComputeECC (strBuild.ToString())
-            //printfn "%s" result
-            outputFile.Write (Convert.ToUInt32(result, 2))
+            printfn "%s" result
+            outputFile.Write (Convert.ToInt32(result, 2))
         // 6. dopisać ostatnie bity
         let strBuild = new StringBuilder(remainBits, 32) 
         while offset < data.Length do 
@@ -87,12 +87,13 @@ type Hamming() =
         let concatEndSize = 26 - strBuild.Length
         for i = (32 - strBuild.Length) downto 1 do
             strBuild.Append("0") |> ignore 
+        //printfn "%s" (strBuild.ToString())  
         for it in seq{0; 1; 2; 4; 8; 16} do
-                strBuild.Insert(it, "0") |> ignore
+            strBuild.Insert(it, '0') |> ignore
         //printfn "%s" (strBuild.ToString())        
         let result = this.ComputeECC (strBuild.ToString())
-        //printfn "%s" result
-        outputFile.Write (Convert.ToUInt32(result, 2))
+        printfn "%s" result
+        outputFile.Write (Convert.ToInt32(result, 2))
         outputFile.Write (byte concatEndSize)
         //8. zapisać plik i zamknąć    
         outputFile.Flush()  
@@ -100,15 +101,22 @@ type Hamming() =
         
 
     member this.Decode() =
-        let data = File.ReadAllBytes(this.fileName)
-        let mutable offset = 0
-        while offset < data.Length do
-            0 |> ignore
+        if this.fileName.Contains(".ecc") then 
+            let data = File.ReadAllBytes(this.fileName)
+            let mutable offset = data.Length
+            while offset < data.Length do
+                0 |> ignore
 
     //może dobre na początek
     member this.Verify() =
-        let data = File.ReadAllBytes(this.fileName)
-        let mutable offset = 0
-        while offset < data.Length do
-            0 |> ignore
-    
+        if this.fileName.Contains(".ecc") then 
+            let data = new BinaryReader (File.OpenRead(this.fileName))
+            data.ReadInt32()
+            |> (fun x -> Convert.ToString(x, 2))
+            |> (fun (x:string) -> x.PadLeft(32, '0'))
+            |> printfn "%s"
+            data.ReadInt32()
+            |> (fun x -> Convert.ToString(x, 2))
+            |> (fun (x:string) -> x.PadLeft(32, '0'))
+            |> printfn "%s"
+            data.Close()

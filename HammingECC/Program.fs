@@ -13,7 +13,7 @@ let PrintHelp() =
     printfn "-D --decode\t\t read .ecc file and save decoded file"
     printfn "-C --verify\t\t check if .ecc file has corrupted bits"
     printfn "-T --time\t\t show process time"
-    printfn "-V --verbose\t\t show statistics"
+    printfn "-V --verbose\t\t show statistics (only with '-D' or '-C' )"
 
 
 [<EntryPoint>]
