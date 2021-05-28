@@ -1,9 +1,9 @@
 module Hamming
 
 open System
-open System.Collections
 open System.IO
 open System.Text
+open System.Diagnostics
 open ArrayExtension
 
 (*  ALGORYTM KODOWANIA
@@ -52,6 +52,11 @@ type Hamming() =
             // 5. zapisać jako 4 bajty do pliku 
         String.Join("", bitArray) 
         
+    member private this.ComputeXOR (data: string) =
+        data
+        |> (fun (x:string) -> x.ToCharArray()) 
+        |> (fun x -> ArrayExtension.filter_it '1' x)
+        |> Array.fold (fun x y -> x^^^y) 0     
 
     member this.Encode() =
         let data = File.ReadAllBytes(this.fileName)
@@ -75,7 +80,7 @@ type Hamming() =
             //printfn "%s" (strBuild.ToString())
             remainBits <- strBuild.ToString().[32..]
             let result = this.ComputeECC (strBuild.ToString())
-            printfn "%s" result
+            if this.verbose = true then printfn "%s" result
             outputFile.Write (Convert.ToInt32(result, 2))
         // 6. dopisać ostatnie bity
         let strBuild = new StringBuilder(remainBits, 32) 
@@ -92,7 +97,7 @@ type Hamming() =
             strBuild.Insert(it, '0') |> ignore
         //printfn "%s" (strBuild.ToString())        
         let result = this.ComputeECC (strBuild.ToString())
-        printfn "%s" result
+        if this.verbose = true then printfn "%s" result
         outputFile.Write (Convert.ToInt32(result, 2))
         outputFile.Write (byte concatEndSize)
         //8. zapisać plik i zamknąć    
@@ -102,21 +107,88 @@ type Hamming() =
 
     member this.Decode() =
         if this.fileName.Contains(".ecc") then 
+            let s1 = Stopwatch()
+            let mutable offset = 0
+            let mutable remainBits = ""
             let data = File.ReadAllBytes(this.fileName)
-            let mutable offset = data.Length
-            while offset < data.Length do
-                0 |> ignore
+            let file = File.OpenWrite(this.fileName.Substring(0, this.fileName.Length - 4))
+            s1.Start()
+            while offset + 5 < data.Length do
+                let strBuild = new StringBuilder(32)
+                for it = 3 downto 0 do 
+                    Convert.ToString(data.[offset + it], 2) 
+                    |> (fun (x:string) -> x.PadLeft(8, '0'))
+                    |> strBuild.Append |> ignore
+                offset <- offset + 4
+                if this.verbose = true then printfn "%s" (strBuild.ToString())
+                let xor_res = (strBuild.ToString()) |> this.ComputeXOR 
+                if not (xor_res = 0) then
+                    if strBuild.Chars(xor_res) = '0' then 
+                        strBuild.Chars(xor_res) <- '1'
+                    else 
+                        strBuild.Chars(xor_res) <- '0'
+                for it in seq{16; 8; 4; 2; 1; 0} do // robimy od konca, bo problemy z indeksami
+                    strBuild.Remove(it, 1) |> ignore
+                strBuild.Insert(0, remainBits) |> ignore
+                let result = strBuild.ToString()
+                for i = 0 to (result.Length / 8) - 1 do
+                    file.WriteByte(Convert.ToByte(result.Substring(i * 8, 8), 2))
+                if result.Length < 32 then remainBits <- result.[24..]
+                else remainBits <- result.[32..]
+            printfn "%d %d" offset (data.Length)
+            // koniec while   
+            let strBuild = new StringBuilder(32)
+            for it = 3 downto 0 do 
+                Convert.ToString(data.[offset + it], 2) 
+                |> (fun (x:string) -> x.PadLeft(8, '0'))
+                |> strBuild.Append |> ignore
+            offset <- offset + 4
+            let nadmiar = data.[offset]
+            if this.verbose = true then printfn "%s" (strBuild.ToString()) 
+            let xor_res = (strBuild.ToString()) |> this.ComputeXOR 
+            if not (xor_res = 0) then
+                if strBuild.Chars(xor_res) = '0' then 
+                    strBuild.Chars(xor_res) <- '1'
+                else 
+                    strBuild.Chars(xor_res) <- '0'
+            for it in seq{16; 8; 4; 2; 1; 0} do // robimy od konca, bo problemy z indeksami
+                strBuild.Remove(it, 1) |> ignore
+            strBuild.Remove(strBuild.Length - int nadmiar, int nadmiar) |> ignore    
+            strBuild.Insert(0, remainBits) |> ignore
+            let result = strBuild.ToString()
+            printf "%d" result.Length
+            for i = 0 to (result.Length / 8) - 1 do
+                file.WriteByte(Convert.ToByte(result.Substring(i * 8, 8), 2))
+            s1.Stop()
+            file.Flush()
+            file.Close()
 
-    //może dobre na początek
     member this.Verify() =
         if this.fileName.Contains(".ecc") then 
-            let data = new BinaryReader (File.OpenRead(this.fileName))
-            data.ReadInt32()
-            |> (fun x -> Convert.ToString(x, 2))
-            |> (fun (x:string) -> x.PadLeft(32, '0'))
-            |> printfn "%s"
-            data.ReadInt32()
-            |> (fun x -> Convert.ToString(x, 2))
-            |> (fun (x:string) -> x.PadLeft(32, '0'))
-            |> printfn "%s"
-            data.Close()
+            let s1 = Stopwatch()
+            let mutable licznik = (0, 0)
+            let mutable offset = 0
+            let data = File.ReadAllBytes(this.fileName)
+            s1.Start()
+            while(offset + 3 < data.Length) do
+                let strBuild = new StringBuilder(32)
+                for it = 3 downto 0 do 
+                    Convert.ToString(data.[offset + it], 2) 
+                    |> (fun (x:string) -> x.PadLeft(8, '0'))
+                    |> strBuild.Append |> ignore
+                offset <- offset + 4
+                if this.verbose = true then printfn "%s" (strBuild.ToString())
+                let xor_res = (strBuild.ToString()) |> this.ComputeXOR 
+                if not (xor_res = 0) then
+                    licznik <- (fst licznik + 1,snd licznik)
+                licznik <- (fst licznik,snd licznik + 1)    
+            s1.Stop()
+            printfn "Verification complete!"
+            ((fst licznik), (((float (fst licznik) / float (snd licznik))).ToString("P")))
+            ||> printfn "Error blocks found: %d (%s)" 
+            if this.time = true then
+                printfn "Time: %dms" (s1.ElapsedMilliseconds)
+            
+
+                
+                
