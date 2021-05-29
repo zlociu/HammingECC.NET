@@ -7,13 +7,13 @@ open System.Diagnostics
 open ArrayExtension
 
 (*  ALGORYTM KODOWANIA
+
          0 1 2 3 4 5 6 7 
        0 _ _ _ 0 _ 1 0 1
        8 _ 1 1 0 0 1 0 1 
       16 _ 1 1 0 0 1 0 1
       24 0 1 1 0 0 1 0 1
       
-
     dane: 26 bitów
     sumy kontrolne: 5 + 1 bitów
 
@@ -42,47 +42,48 @@ type Hamming() =
     member private this.ComputeECC (data:string) = 
         let bitArray = data.[0..31]
                         |> (fun (x:string) -> x.ToCharArray()) 
-                        |> Array.map (fun x -> int (Char.GetNumericValue x))
-            // 4. dorobić bity parzystości
+                        |> Array.map (fun x -> (int x) - 48)
+            (* 4. dorobić bity parzystości *)
         for it in seq{1; 2; 4; 8; 16} do
             bitArray.[it] <- bitArray 
                             |> ArrayExtension.filteri (fun x -> (x &&& it = it))
                             |> Array.fold (fun x y -> x ^^^ y) 0 
         bitArray.[0] <- bitArray |> Array.fold (fun x y -> x ^^^ y) 0
-            // 5. zapisać jako 4 bajty do pliku 
+            (* 5. zapisać jako 4 bajty do pliku *)
         String.Join("", bitArray) 
         
+
     member private this.ComputeXOR (data: string) =
         data
         |> (fun (x:string) -> x.ToCharArray()) 
         |> (fun x -> ArrayExtension.filter_it '1' x)
         |> Array.fold (fun x y -> x^^^y) 0     
 
+
     member this.Encode() =
         let data = File.ReadAllBytes(this.fileName)
         let outputFile = new BinaryWriter (File.OpenWrite(this.fileName + ".ecc"))
         let mutable offset = 0;
         let mutable remainBits = ""
-    
+        let s1 = Stopwatch()
+        s1.Start()
         while ( ((offset + 2) < data.Length && remainBits.Length > 0) || ((offset + 3) < data.Length) ) do
-            // 1. przygotować nową porcję bitów (26 bitów z)
+            (* 1. przygotować nową porcję bitów (26 bitów z) *)
             let strBuild = new StringBuilder(remainBits, 32) 
             while strBuild.Length < 26 do 
                 Convert.ToString(data.[offset], 2) 
                 |> (fun (x:string) -> x.PadLeft(8, '0'))
                 |> strBuild.Append |> ignore
                 offset <- offset + 1
-            //printfn "%s" (strBuild.ToString())
-            // 2. dodać bity parzystości
+            (* 2. dodać bity parzystości *)
             for i in seq{0; 1; 2; 4; 8; 16} do
                 strBuild.Insert(i, '0') |> ignore
-            // 3. nadmiarowe bity przenieś do następnej iteracji
-            //printfn "%s" (strBuild.ToString())
+            (* 3. nadmiarowe bity przenieś do następnej iteracji *)
             remainBits <- strBuild.ToString().[32..]
             let result = this.ComputeECC (strBuild.ToString())
             if this.verbose = true then printfn "%s" result
             outputFile.Write (Convert.ToInt32(result, 2))
-        // 6. dopisać ostatnie bity
+        (* 6. dopisać ostatnie bity *)
         let strBuild = new StringBuilder(remainBits, 32) 
         while offset < data.Length do 
             Convert.ToString(data.[offset], 2) 
@@ -91,16 +92,17 @@ type Hamming() =
             offset <- offset + 1
         let concatEndSize = 26 - strBuild.Length
         for i = (32 - strBuild.Length) downto 1 do
-            strBuild.Append("0") |> ignore 
-        //printfn "%s" (strBuild.ToString())  
-        for it in seq{0; 1; 2; 4; 8; 16} do
-            strBuild.Insert(it, '0') |> ignore
-        //printfn "%s" (strBuild.ToString())        
+            strBuild.Append("0") |> ignore  
+        for it in seq{0; 1; 2; 4; 8; 16} do  
+            strBuild.Insert(it, '0') |> ignore   
         let result = this.ComputeECC (strBuild.ToString())
         if this.verbose = true then printfn "%s" result
         outputFile.Write (Convert.ToInt32(result, 2))
         outputFile.Write (byte concatEndSize)
-        //8. zapisać plik i zamknąć    
+        s1.Stop()
+        if this.time = true then
+                printfn "Time: %dms" (s1.ElapsedMilliseconds)
+        (* 7. zapisać plik i zamknąć  *)   
         outputFile.Flush()  
         outputFile.Close() 
         
@@ -115,28 +117,32 @@ type Hamming() =
             s1.Start()
             while offset + 5 < data.Length do
                 let strBuild = new StringBuilder(32)
+                (* 1. pobrac 32 bity *)
                 for it = 3 downto 0 do 
                     Convert.ToString(data.[offset + it], 2) 
                     |> (fun (x:string) -> x.PadLeft(8, '0'))
                     |> strBuild.Append |> ignore
                 offset <- offset + 4
                 if this.verbose = true then printfn "%s" (strBuild.ToString())
+                (* 2. obliczyc xor *)
                 let xor_res = (strBuild.ToString()) |> this.ComputeXOR 
                 if not (xor_res = 0) then
                     if strBuild.Chars(xor_res) = '0' then 
                         strBuild.Chars(xor_res) <- '1'
                     else 
                         strBuild.Chars(xor_res) <- '0'
+                (* 3. usun bity parzystosci *)
                 for it in seq{16; 8; 4; 2; 1; 0} do // robimy od konca, bo problemy z indeksami
                     strBuild.Remove(it, 1) |> ignore
                 strBuild.Insert(0, remainBits) |> ignore
                 let result = strBuild.ToString()
+                (* 4. zapis do pliku *)
                 for i = 0 to (result.Length / 8) - 1 do
                     file.WriteByte(Convert.ToByte(result.Substring(i * 8, 8), 2))
                 if result.Length < 32 then remainBits <- result.[24..]
                 else remainBits <- result.[32..]
-            printfn "%d %d" offset (data.Length)
-            // koniec while   
+            (* ------------------< koniec while >--------------------- *)
+            (* 5. ostatnia iteracja *)
             let strBuild = new StringBuilder(32)
             for it = 3 downto 0 do 
                 Convert.ToString(data.[offset + it], 2) 
@@ -156,17 +162,21 @@ type Hamming() =
             strBuild.Remove(strBuild.Length - int nadmiar, int nadmiar) |> ignore    
             strBuild.Insert(0, remainBits) |> ignore
             let result = strBuild.ToString()
-            printf "%d" result.Length
             for i = 0 to (result.Length / 8) - 1 do
                 file.WriteByte(Convert.ToByte(result.Substring(i * 8, 8), 2))
             s1.Stop()
+            if this.time = true then
+                printfn "Time: %dms" (s1.ElapsedMilliseconds)
             file.Flush()
             file.Close()
+        else
+            raise (FileNotFoundException("Wrong file extension (should be: .ecc)"))
+
 
     member this.Verify() =
         if this.fileName.Contains(".ecc") then 
             let s1 = Stopwatch()
-            let mutable licznik = (0, 0)
+            let licznik = [|0; 0|]
             let mutable offset = 0
             let data = File.ReadAllBytes(this.fileName)
             s1.Start()
@@ -180,14 +190,16 @@ type Hamming() =
                 if this.verbose = true then printfn "%s" (strBuild.ToString())
                 let xor_res = (strBuild.ToString()) |> this.ComputeXOR 
                 if not (xor_res = 0) then
-                    licznik <- (fst licznik + 1,snd licznik)
-                licznik <- (fst licznik,snd licznik + 1)    
+                    licznik.[0] <- licznik.[0] + 1
+                licznik.[1] <- licznik.[1] + 1    
             s1.Stop()
             printfn "Verification complete!"
-            ((fst licznik), (((float (fst licznik) / float (snd licznik))).ToString("P")))
+            ((licznik.[0]), (((float (licznik.[0]) / float (licznik.[1]))).ToString("P")))
             ||> printfn "Error blocks found: %d (%s)" 
             if this.time = true then
                 printfn "Time: %dms" (s1.ElapsedMilliseconds)
+        else
+            raise (FileNotFoundException("Wrong file extension (should be: .ecc)"))
             
 
                 
