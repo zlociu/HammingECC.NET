@@ -1,6 +1,6 @@
 # HammingECC.NET
 ### About
-Error correction code with Hamming algorithm implemented in F# with .NET 5.  
+Error correction code with Hamming algorithm implemented in F# with .NET 6.  
 Application is run from console. Generates files with _.ecc_ extension.  
 This project contains two files: _test.txt_ and _test.txt.ecc_ as example of encoding.
 
