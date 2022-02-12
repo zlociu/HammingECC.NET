@@ -9,10 +9,10 @@ open ArrayExtension
 (*  ALGORYTM KODOWANIA
 
          0 1 2 3 4 5 6 7 
-       0 _ _ _ 0 _ 1 0 1
+       0 _ _ _ 0 _ 1 0 1 
        8 _ 1 1 0 0 1 0 1 
-      16 _ 1 1 0 0 1 0 1
-      24 0 1 1 0 0 1 0 1
+      16 _ 1 1 0 0 1 0 1 
+      24 0 1 1 0 0 1 0 1 
       
     dane: 26 bitów
     sumy kontrolne: 5 + 1 bitów
@@ -51,14 +51,6 @@ type Hamming() =
         bitArray.[0] <- bitArray |> Array.fold (fun x y -> x ^^^ y) 0
             (* 5. zapisać jako 4 bajty do pliku *)
         String.Join("", bitArray) 
-        
-
-    member private this.ComputeXOR (data: string) =
-        data
-        |> (fun (x:string) -> x.ToCharArray()) 
-        |> (fun x -> ArrayExtension.filter_it '1' x)
-        |> Array.fold (fun x y -> x^^^y) 0     
-
 
     member this.Encode() =
         let data = File.ReadAllBytes(this.fileName)
@@ -79,7 +71,7 @@ type Hamming() =
             for i in seq{0; 1; 2; 4; 8; 16} do
                 strBuild.Insert(i, '0') |> ignore
             (* 3. nadmiarowe bity przenieś do następnej iteracji *)
-            remainBits <- strBuild.ToString().[32..]
+            remainBits <- strBuild.ToString().[32..] 
             let result = this.ComputeECC (strBuild.ToString())
             if this.verbose = true then printfn "%s" result
             outputFile.Write (Convert.ToInt32(result, 2))
@@ -106,6 +98,12 @@ type Hamming() =
         outputFile.Flush()  
         outputFile.Close() 
         
+
+    member private this.ComputeXOR (data: string) =
+        data
+        |> (fun (x:string) -> x.ToCharArray()) 
+        |> (fun x -> ArrayExtension.filter_it '1' x)
+        |> Array.fold (fun x y -> x^^^y) 0     
 
     member this.Decode() =
         if this.fileName.Contains(".ecc") then 
@@ -187,10 +185,10 @@ type Hamming() =
                     |> (fun (x:string) -> x.PadLeft(8, '0'))
                     |> strBuild.Append |> ignore
                 offset <- offset + 4
-                if this.verbose = true then printfn "%s" (strBuild.ToString())
+                if this.verbose = true then printfn "%s" (strBuild.ToString()) 
                 let xor_res = (strBuild.ToString()) |> this.ComputeXOR 
-                if not (xor_res = 0) then
-                    licznik.[0] <- licznik.[0] + 1
+                if not (xor_res = 0) then 
+                    licznik.[0] <- licznik.[0] + 1 
                 licznik.[1] <- licznik.[1] + 1    
             s1.Stop()
             printfn "Verification complete!"

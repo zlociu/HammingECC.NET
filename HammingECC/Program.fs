@@ -15,44 +15,51 @@ let PrintHelp() =
     printfn "-T --time\t\t show process time"
     printfn "-V --verbose\t\t show debug output"
 
+let rec ProcessArguments (manager:Hamming) (arguments: List<string>) =
+    match arguments with
+    | "-H" :: _  | "--help" :: _ -> 
+        PrintHelp()
+        exit 0
+    | "-E" :: list | "--encode" :: list -> 
+        manager.mode <- Mode.ENCODE
+        ProcessArguments manager list
+    | "-D" :: list | "--decode" :: list -> 
+        manager.mode <- Mode.DECODE
+        ProcessArguments manager list
+    | "-C" :: list | "--verify" :: list -> 
+        manager.mode <- Mode.VERIFY
+        ProcessArguments manager list
+    | "-T" :: list | "--time" :: list -> 
+        manager.time <- true
+        ProcessArguments manager list
+    | "-V" :: list | "--verbose" :: list -> 
+        manager.verbose <- true
+        ProcessArguments manager list
+    | "--" :: file :: list->
+        if file.Contains('.') then 
+            manager.fileName <- file
+            ProcessArguments manager list
+        else
+            raise (ArgumentException("Command error"))
+    | file :: list ->
+        if file.Contains('.') && not (file.StartsWith("-")) then 
+            manager.fileName <- file
+            ProcessArguments manager list
+        else
+            raise (ArgumentException("Command error"))
+    | [] -> 0 |> ignore
 
 [<EntryPoint>]
 let main argv =
     let arguments = argv
     let mutable iter = 0
     let manager = new Hamming()
-    while iter < arguments.Length do
-        try
-            match arguments.[iter] with
-            | "-H" | "--help" -> 
-                PrintHelp()
-                exit 0
-            | "-E" | "--encode" -> 
-                manager.mode <- Mode.ENCODE
-                iter <- iter + 1
-            | "-D" | "--decode" -> 
-                manager.mode <- Mode.DECODE
-                iter <- iter + 1
-            | "-C" | "--verify" -> 
-                manager.mode <- Mode.VERIFY
-                iter <- iter + 1
-            | "-T" | "--time" -> 
-                manager.time <- true
-                iter <- iter + 1
-            | "-V" | "--verbose" -> 
-                manager.verbose <- true
-                iter <- iter + 1
-            | file ->
-                if file.Contains('.') && not (file.StartsWith("-")) then 
-                    manager.fileName <- file
-                    iter <- iter + 1
-                else
-                    raise (ArgumentException("Command error"))
-        with 
-        | ex -> 
-            printfn "%s" ex.Message
-            exit -1
-
+    try
+        (Array.toList arguments) |> (ProcessArguments manager)   
+    with 
+    | ex -> 
+        printfn "%s" ex.Message
+        exit -1
     try
         if manager.fileName = "" then raise (ArgumentException("No input file"))
         match manager.mode with 
